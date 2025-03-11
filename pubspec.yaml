@@ -39,6 +39,8 @@ dependencies:
   shelf_web_socket: ^3.0.0
   async: ^2.12.0
   sensors_plus: ^6.1.1
+  path_provider: ^2.1.5
+  permission_handler: ^11.4.0
 
 dev_dependencies:
   flutter_test:
