@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:mouse_test/socket_connector.dart';
+import 'package:mouse_test/frontend.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,55 +28,55 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-  final String title;
+// class MyHomePage extends StatefulWidget {
+//   const MyHomePage({super.key, required this.title});
+//   final String title;
 
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
+//   @override
+//   State<MyHomePage> createState() => _MyHomePageState();
+// }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+// class _MyHomePageState extends State<MyHomePage> {
+//   int _counter = 0;
 
-  void _incrementCounter() {
-    setState(() {
-      _counter++;
-    });
-  }
+//   void _incrementCounter() {
+//     setState(() {
+//       _counter++;
+//     });
+//   }
 
-  @override
-/*************  ✨ Codeium Command ⭐  *************/
-  /// Returns a [Scaffold] containing an [AppBar] with the title set to [widget.title],
-  /// a [Center] widget containing a [Column] with a [Text] displaying the number
-  /// of times the button has been pushed, and a [FloatingActionButton] that increments
-  /// the counter when pressed. The color scheme is set to the inverse primary color
-  /// of the theme.
-/******  e33497d6-ac55-4cee-94a0-5206b1d81a3a  *******/
+//   @override
+// /*************  ✨ Codeium Command ⭐  *************/
+//   /// Returns a [Scaffold] containing an [AppBar] with the title set to [widget.title],
+//   /// a [Center] widget containing a [Column] with a [Text] displaying the number
+//   /// of times the button has been pushed, and a [FloatingActionButton] that increments
+//   /// the counter when pressed. The color scheme is set to the inverse primary color
+//   /// of the theme.
+// /******  e33497d6-ac55-4cee-94a0-5206b1d81a3a  *******/
 
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Text(widget.title),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ),
-    );
-  }
-}
+//   Widget build(BuildContext context) {
+//     return Scaffold(
+//       appBar: AppBar(
+//         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+//         title: Text(widget.title),
+//       ),
+//       body: Center(
+//         child: Column(
+//           mainAxisAlignment: MainAxisAlignment.center,
+//           children: <Widget>[
+//             const Text('You have pushed the button this many times:'),
+//             Text(
+//               '$_counter',
+//               style: Theme.of(context).textTheme.headlineMedium,
+//             ),
+//           ],
+//         ),
+//       ),
+//       floatingActionButton: FloatingActionButton(
+//         onPressed: _incrementCounter,
+//         tooltip: 'Increment',
+//         child: const Icon(Icons.add),
+//       ),
+//     );
+//   }
+// }
