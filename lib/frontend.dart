@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:async/async.dart';
 import 'package:flutter/material.dart';
 import 'package:mouse_test/abstpoint.dart';
+import 'package:mouse_test/cryptograph.dart';
 import 'package:mouse_test/main_logic.dart';
 import 'package:mouse_test/physics_helper.dart';
 import 'package:mouse_test/point.dart';
@@ -24,21 +25,19 @@ class SocketConnector extends StatefulWidget {
 }
 
 class _SocketConnectorState extends State<SocketConnector> {
-
   MainLogic mainLogic = MainLogic();
-  bool userMode=false;
+  bool userMode = true;
   final formatKey = GlobalKey<FormState>();
-  bool isValidationOk=true;
-  bool isTryingToConnect=false;
-  String hardCodedIp="192.168.178.82";
+  bool isValidationOk = true;
+  bool isTryingToConnect = false;
+  String hardCodedIp = "192.168.178.82";
+  Cryptograph cryptograph = Cryptograph();
 
   @override
   void initState() {
     print("погнали");
     super.initState();
-
   }
-
 
   @override
   void dispose() {
@@ -128,22 +127,16 @@ class _SocketConnectorState extends State<SocketConnector> {
   //     channel.sink.add("movement,${dx},${dy}");
   //   }
   // }
-  
 
-  void saveIp(){
- 
-    if(userMode){
-     
-      if(formatKey.currentState!.validate()){
-      formatKey.currentState!.save();
-    }
-    }
-    else{
+  void saveIp() {
+    if (userMode) {
+      if (formatKey.currentState!.validate()) {
+        formatKey.currentState!.save();
+      }
+    } else {
       print(":)");
       formatKey.currentState!.save();
     }
-    
-    
   }
 
   @override
@@ -152,70 +145,133 @@ class _SocketConnectorState extends State<SocketConnector> {
       appBar: AppBar(title: Text("IMU Mouse Controller")),
       body: Center(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            ElevatedButton(onPressed: (){
-              mainLogic.sendToServer(TypesOfClick.LEFT_CLICK);
 
-            }, child: Text("Left Click")),
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    mainLogic.sendToServer(TypesOfClick.LEFT_CLICK);
+                  },
+                  onDoubleTap: () {
+                    mainLogic.sendToServer(TypesOfClick.DOUBLE_CLICK);
+                  },
+                  onLongPressStart: (value) {
+                    print("start");
+                    mainLogic.sendToServer(TypesOfClick.LONG_LEFT_START);
+                    print("end");
+                  },
+                  onLongPressEnd: (value) {
+                    mainLogic.sendToServer(TypesOfClick.LONG_LEFT_END);
+                  },
+                  child: Container(
+                    color: Colors.blue,
+                    width: MediaQuery.of(context).size.height / 7,
+                    height: 300,
+                    child: Text("Left Click"),
+                  ),
+                ),
+                GestureDetector(
+                  onVerticalDragUpdate: (details) {
+                    if (details.primaryDelta! < -1) {
+                      
+                      mainLogic.sendToServer(TypesOfClick.SCROLL_UP);
+                    } else if (details.primaryDelta! > 1) {
+                      
+                      mainLogic.sendToServer(TypesOfClick.SCROLL_DOWN);
+                    }
+                  },
+                  child: Container(
+                    color: Colors.black,
+                    height: 150,
+                    width: MediaQuery.of(context).size.width / 3,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () {
+                    mainLogic.sendToServer(TypesOfClick.RIGHT_CLICK);
+                  },
+                  child: Container(
+                    color: Colors.blue,
+                    width: MediaQuery.of(context).size.width / 3,
+                    height: 300,
+                    child: Text("Right Click"),
+                  ),
+                ),
+              ],
+            ),
             Text("Enter your Server ip:"),
-            Form(key: formatKey,
+            Form(
+              key: formatKey,
               child: TextFormField(
-                validator: (value){
-                  if(!isValidationOk){
-                     isValidationOk=true;
+                validator: (value) {
+                  if (!isValidationOk) {
+                    isValidationOk = true;
                     return "Wrong IP, please try another one";
                   }
-                  if(value == null || value.isEmpty){
+                  if (value == null || value.isEmpty) {
                     return "Please enter your server ip";
                   }
                   return null;
                 },
-                onSaved: (newValue){
+                onSaved: (newValue) {
                   print("hi");
-                  if(!userMode){
-                    newValue=hardCodedIp;
+                  if (!userMode) {
+                    newValue = hardCodedIp;
                   }
-                  setState((){
-                    isTryingToConnect=true;
+                  setState(() {
+                    isTryingToConnect = true;
                   });
-                  Future<bool> result =  mainLogic.startConnection(newValue!);
+                  print(cryptograph.decryptIp(newValue!));
+                  Future<bool> result = mainLogic.startConnection(
+                    cryptograph.decryptIp(newValue!),
+                  );
                   result.then((value) {
-                    if(!value){
-                      isValidationOk=false;
+                    if (!value) {
+                      isValidationOk = false;
                       formatKey.currentState!.validate();
                       // ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Connection failed, try another ip")));
-                    }
-                    else{
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Connection successful")));
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text("Connection successful")),
+                      );
                     }
                   });
-                  setState((){
-                    isTryingToConnect=false;;
+                  setState(() {
+                    isTryingToConnect = false;
+                    ;
                   });
                 },
-                
-            ),),
-            isTryingToConnect?CircularProgressIndicator():
-            Row(
-              children: [
-                ElevatedButton(
-                  onPressed: () {
-                    //print("pressed");
-                      saveIp();
-                    // channel.sink.add("1");
-                  },
-                  child: Text("Connect!"),
-                ),
-                ElevatedButton(
-                  child:SizedBox(width: 100, height:100, child: Text("отделить",)),
-                  onPressed: (){
-                    print("##################################################################################################");
-                  },
-                )
-              ],
-              
+              ),
             ),
+            isTryingToConnect
+                ? CircularProgressIndicator()
+                : Row(
+                  children: [
+                    ElevatedButton(
+                      onPressed: () {
+                        //print("pressed");
+                        saveIp();
+                        // channel.sink.add("1");
+                      },
+                      child: Text("Connect!"),
+                    ),
+                    ElevatedButton(
+                      child: SizedBox(
+                        width: 100,
+                        height: 100,
+                        child: Text("отделить"),
+                      ),
+                      onPressed: () {
+                        print(
+                          "##################################################################################################",
+                        );
+                      },
+                    ),
+                  ],
+                ),
           ],
         ),
       ),

@@ -41,6 +41,8 @@ dependencies:
   sensors_plus: ^6.1.1
   path_provider: ^2.1.5
   permission_handler: ^11.4.0
+  simple_kalman: ^1.0.2
+  dchs_motion_sensors: ^2.0.1
 
 dev_dependencies:
   flutter_test:

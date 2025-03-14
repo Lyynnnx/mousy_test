@@ -1,10 +1,18 @@
 import 'dart:async';
+import 'dart:developer';
+import 'dart:isolate';
 
+import 'package:async/async.dart';
+import 'package:flutter/foundation.dart';
 import 'package:mouse_test/abstpoint.dart';
+import 'package:mouse_test/direction.dart';
 import 'package:mouse_test/physics_helper.dart';
 import 'package:mouse_test/server_connector.dart';
 import 'package:mouse_test/types_of_click.dart';
 import 'package:sensors_plus/sensors_plus.dart';
+import 'package:sensors_plus/sensors_plus.dart' as dchsMotionSensors;
+import 'package:simple_kalman/simple_kalman.dart';
+
 
 class MainLogic {
 
@@ -35,7 +43,7 @@ class MainLogic {
   late ServerConnector serverConnector;
   bool isConnectionInitialised=false;
 //double deadZone = 0.05;
-  double deadZone = 0.05; // "Мертвая зона" (игнорируем мелкие изменения)
+  double deadZone = 0.1; // "Мертвая зона" (игнорируем мелкие изменения)
   double floatingZone = 0.1; // "Мертвая зона" (игнорируем мелкие изменения)
 
   bool isOnGround(double z){
@@ -56,9 +64,6 @@ class MainLogic {
   }
 
 
-  double biasX = 0.0;
-double biasY = 0.0;
-
 void calibrateAccelerometer() {
     // Усредняем значения за несколько измерений
     for (int i = 0; i < 100; i++) {
@@ -75,7 +80,7 @@ void calibrateAccelerometer() {
 
   void startAccelerometerListener() {
     
-    accelerometerSubscription = accelerometerEvents.listen(
+    accelerometerSubscription = accelerometerEventStream(samplingPeriod: Duration(milliseconds: 50)).listen(
       (
       AccelerometerEvent event,
     ) {
@@ -147,6 +152,474 @@ void calibrateAccelerometer() {
   }
 
 
+
+
+// final kalmanX = SimpleKalman(errorMeasure: 150, errorEstimate: 200, q: 0.8);
+// final kalmanY = SimpleKalman(errorMeasure: 1, errorEstimate: 100, q: 0.2);
+      
+
+//   void startAccelerometerListenerKalman() {
+    
+//     accelerometerSubscription = accelerometerEvents.listen(
+//       (
+//       AccelerometerEvent event,
+//     ) {
+//       double x1=kalmanX.filtered(event.x);
+//       double y1=kalmanY.filtered(event.y);
+
+      
+//        //меряем время для delta t
+//       newTime = event.timestamp;
+//       // print(newTime.difference(oldTime).inMilliseconds);
+//       double dt= newTime.difference(oldTime).inMilliseconds/1000;
+//       oldTime = newTime;
+//     //делаем первый average
+//       if (firstRead) {
+//         avgx = x1;
+//         avgy = y1;
+//         firstRead = false;
+
+//         oldTime = event.timestamp;
+//         return;
+//       }
+//       //если телефон в воздухе, или нет сильного движения
+//       if (!isOnGround(event.z)||((avgx - x1).abs() < deadZone && (avgy - y1).abs() < deadZone)) {
+//           //усредняем
+
+//           physicsHelper.wasStopped();
+//           accXBuffer.add(x1);
+//           accYBuffer.add(y1);
+//           if (accXBuffer.length > bufferSize) {
+//             accXBuffer.removeAt(0);
+//           }
+//           if (accYBuffer.length > bufferSize) {
+//             accYBuffer.removeAt(0);
+//           }
+
+          
+
+//           double oldavgx = avgx;
+//           double oldavgy = avgy;
+//           //сохраняем average
+//           avgx = accXBuffer.fold(0.0, (sum, x) => sum + (x)) / accXBuffer.length;
+//           avgy = accYBuffer.fold(0.0, (sum, x) => sum + (x)) / accYBuffer.length;
+//           oldTime = DateTime.now();
+//          //print("no movement: x:${(event.x - oldavgx).abs()} y:${(event.y - oldavgy).abs()}",);
+//           return;
+//       } else {
+//           double oldavgx = avgx;
+//           double oldavgy = avgy;
+//           accXBuffer.clear();
+//           accYBuffer.clear();
+          
+//           physicsHelper.findDelta(x1-avgx, y1-avgy, dt);
+//           //physicsHelper.findDelta(event.x-biasX, event.y-biasY, dt);
+
+//           //сохраняем новый average
+//           //print("it was a movement: ${event.x} ${event.y}");
+//           avgx = x1;
+//           avgy = y1;
+//           accXBuffer.add(x1);
+//           accYBuffer.add(y1);
+//           if (accXBuffer.length > bufferSize) {
+//             accXBuffer.removeAt(0);
+//           }
+//           if (accYBuffer.length > bufferSize) {
+//             accYBuffer.removeAt(0);
+//           }
+//       }
+//     });
+    
+
+//     oldTime = DateTime.now();
+//   }
+
+  List<double> mxBuffer=[];
+  List<double> myBuffer=[];
+  int mBufferSize=2;
+  double avgMx=0;
+  double avgMy=0;
+  double mDeadZone=0.02;
+  bool mFirstRead=true;
+
+
+  double biasX = 0, biasY = 0, biasZ = 0;
+bool calibrated = false;
+
+void calibrate(double x, double y) {
+  biasX = x;
+  biasY = y;
+  calibrated = true;
+}
+
+  List<Direction> directionFounder(double mx, double my){
+    //log( "$mx $my");
+    if(!calibrated) calibrate(mx, my);
+    mx-=biasX;
+    my-=biasY;
+    List<Direction> ans=[];
+    String answerX="";  
+    String answerY="";  
+    if(mFirstRead){
+      avgMx=mx;
+      avgMy=my;
+      mFirstRead=false;
+      ans.add(Direction.NO_MOVEMENT);
+      ans.add(Direction.NO_MOVEMENT);
+      return ans;
+    }
+    if((mx-avgMx).abs() < mDeadZone){
+      mxBuffer.add(mx);    
+      if (mxBuffer.length > mBufferSize) {
+        mxBuffer.removeAt(0);
+      }
+      for(int i=0;i<mxBuffer.length;i++){
+        avgMx+=mxBuffer[i]* (1/(mxBuffer.length-i));
+      }
+      //avgMx = mxBuffer.fold(0.0, (sum, x) => sum + (x)) / mxBuffer.length;
+      answerX="no movement";
+      ans.add(Direction.NO_MOVEMENT);
+    } 
+    else{
+      if(mx>avgMx){
+        answerX="right";
+        ans.add(Direction.RIGHT);
+        avgMx=mx;
+      }
+      else{
+        answerX="left";
+        ans.add(Direction.LEFT);
+        avgMx=mx;
+      }
+    }
+
+    if((my-avgMy).abs() < mDeadZone){
+      myBuffer.add(my);    
+      if (myBuffer.length > mBufferSize) {
+        myBuffer.removeAt(0);
+      }
+      avgMy = myBuffer.fold(0.0, (sum, x) => sum + (x)) / myBuffer.length;
+      ans.add(Direction.NO_MOVEMENT);
+      answerY="no movement";
+    } 
+    else{
+      if(my>avgMy){
+        ans.add(Direction.UP);
+        answerY="up";
+        avgMy=my;
+      }
+      else{
+        ans.add(Direction.DOWN);
+        answerY="down";
+        avgMy=my;
+      }
+    }
+
+    return ans;
+
+
+  } 
+
+
+
+
+  void dataScanning(List<List<dynamic>> values) {
+    if (isProcessing) return; // Пропуск, если обработка не завершена
+        isProcessing = true;
+
+      var accel = values[0]; // Данные акселерометра
+      var mag = values[1];   // Данные магнитометра
+      var gyr = values[2];
+    
+      double ax=accel[0] as double;
+      double ay=accel[1] as double;
+      double az=accel[2] as double;
+
+      double mx=mag[0] as double;
+      double my=mag[1] as double;
+      double mz=mag[2] as double;
+
+      double gx=gyr[0] as double;
+      double gy=gyr[1] as double;
+      double gz=gyr[2] as double;
+
+      var ans=directionFounder(gx, gy);
+      log("direction: ${ans[0]} ${ans[1]}");
+
+       //меряем время для delta t
+      newTime = accel[3] as DateTime;
+      // print(newTime.difference(oldTime).inMilliseconds);
+      double dt= newTime.difference(oldTime).inMilliseconds/1000;
+      oldTime = newTime;
+    //делаем первый average
+      if (firstRead) {
+        avgx = ax;
+        avgy = ay;
+        firstRead = false;
+
+        oldTime = accel[3] as DateTime;
+        isProcessing = false;
+        return;
+      }
+      //если телефон в воздухе, или нет сильного движения
+      if (!isOnGround(az)||((avgx -ax).abs() < deadZone && (avgy - ay).abs() < deadZone)) {
+          //усредняем
+
+          physicsHelper.wasStopped();
+          accXBuffer.add(ax);
+          accYBuffer.add(ay);
+          if (accXBuffer.length > bufferSize) {
+            accXBuffer.removeAt(0);
+          }
+          if (accYBuffer.length > bufferSize) {
+            accYBuffer.removeAt(0);
+          }
+
+          
+
+          double oldavgx = avgx;
+          double oldavgy = avgy;
+          //сохраняем average
+          avgx = accXBuffer.fold(0.0, (sum, x) => sum + (x)) / accXBuffer.length;
+          avgy = accYBuffer.fold(0.0, (sum, x) => sum + (x)) / accYBuffer.length;
+          oldTime = DateTime.now();
+         //print("no movement: x:${(event.x - oldavgx).abs()} y:${(event.y - oldavgy).abs()}",);
+          isProcessing = false;
+          return;
+      } else {
+          double oldavgx = avgx;
+          double oldavgy = avgy;
+          accXBuffer.clear();
+          accYBuffer.clear();
+          
+          physicsHelper.findDelta(ax-avgx, ay-avgy, dt);
+          //physicsHelper.findDelta(event.x-biasX, event.y-biasY, dt);
+
+          //сохраняем новый average
+          //print("it was a movement: ${event.x} ${event.y}");
+          avgx = ax;
+          avgy = ay;
+          accXBuffer.add(ax);
+          accYBuffer.add(ay);
+          if (accXBuffer.length > bufferSize) {
+            accXBuffer.removeAt(0);
+          }
+          if (accYBuffer.length > bufferSize) {
+            accYBuffer.removeAt(0);
+          }
+      }
+      isProcessing = false;
+    
+    //isProcessing = false;
+    oldTime = DateTime.now();
+  }
+
+
+
+
+
+
+
+
+  bool isProcessing=false;
+  late StreamSubscription magnetometerSubscription;
+  void startAccelerometerListenerMagnetometer() {
+    
+     final accelStream = accelerometerEventStream(samplingPeriod: Duration(milliseconds: 100)).map((event) => [event.x, event.y, event.z, event.timestamp]);
+     final magStream =magnetometerEvents.map((e) => [e.x, e.y, e.z, e.timestamp]);
+     final gyrStream = gyroscopeEvents.map((e) => [e.x, e.y, e.z, e.timestamp]);
+     StreamZip([accelStream, magStream, gyrStream]).listen((values)async {
+        
+
+      //  if (isProcessing) return; // Пропуск, если обработка не завершена
+      //   isProcessing = true;
+
+      var accel = values[0]; // Данные акселерометра
+      var mag = values[1];   // Данные магнитометра
+      var gyr = values[2];
+    
+      double ax=accel[0] as double;
+      double ay=accel[1] as double;
+      double az=accel[2] as double;
+
+      double mx=mag[0] as double;
+      double my=mag[1] as double;
+      double mz=mag[2] as double;
+
+      double gx=gyr[0] as double;
+      double gy=gyr[1] as double;
+      double gz=gyr[2] as double;
+
+      var ans=directionFounder(gx, gy);
+      //log("direction: ${ans[0]} ${ans[1]}");
+      //return;
+       //меряем время для delta t
+      newTime = accel[3] as DateTime;
+      // print(newTime.difference(oldTime).inMilliseconds);
+      double dt= newTime.difference(oldTime).inMilliseconds/1000;
+      oldTime = newTime;
+    //делаем первый average
+      if (firstRead) {
+        avgx = ax;
+        avgy = ay;
+        firstRead = false;
+
+        oldTime = accel[3] as DateTime;
+        isProcessing = false;
+        return;
+      }
+      //если телефон в воздухе, или нет сильного движения
+      if (!isOnGround(az)||((avgx -ax).abs() < deadZone && (avgy - ay).abs() < deadZone)) {
+          //усредняем
+
+          physicsHelper.wasStopped();
+          accXBuffer.add(ax);
+          accYBuffer.add(ay);
+          if (accXBuffer.length > bufferSize) {
+            accXBuffer.removeAt(0);
+          }
+          if (accYBuffer.length > bufferSize) {
+            accYBuffer.removeAt(0);
+          }
+
+          
+
+          double oldavgx = avgx;
+          double oldavgy = avgy;
+          //сохраняем average
+          avgx = accXBuffer.fold(0.0, (sum, x) => sum + (x)) / accXBuffer.length;
+          avgy = accYBuffer.fold(0.0, (sum, x) => sum + (x)) / accYBuffer.length;
+          oldTime = DateTime.now();
+         //print("no movement: x:${(event.x - oldavgx).abs()} y:${(event.y - oldavgy).abs()}",);
+          isProcessing = false;
+          return;
+      } else {
+          double oldavgx = avgx;
+          double oldavgy = avgy;
+          accXBuffer.clear();
+          accYBuffer.clear();
+          
+          physicsHelper.findDelta(ax-avgx, ay-avgy, dt);
+          //physicsHelper.findDelta(event.x-biasX, event.y-biasY, dt);
+
+          //сохраняем новый average
+          //print("it was a movement: ${event.x} ${event.y}");
+          avgx = ax;
+          avgy = ay;
+          accXBuffer.add(ax);
+          accYBuffer.add(ay);
+          if (accXBuffer.length > bufferSize) {
+            accXBuffer.removeAt(0);
+          }
+          if (accYBuffer.length > bufferSize) {
+            accYBuffer.removeAt(0);
+          }
+      }
+      isProcessing = false;
+    });
+    
+    //isProcessing = false;
+    oldTime = DateTime.now();
+  }
+  //  void startAccelerometerListenerMagnetometer() {
+  //  // SensorInterval();
+    
+  //  // final accelStream = accelerometerEventStream(samplingPeriod: Duration(milliseconds: 100)).map((e) => [e.x, e.y, e.z, e.timestamp]);
+  //   final accelStream = accelerometerEvents.map((e) => [e.x, e.y, e.z, e.timestamp]);
+  //   //final magStream = magnetometerEvents.map((e) => [e.x, e.y, e.z, e.timestamp]);
+  //   //dchsMotionSensors.accelerometerEvents. setUpdateInterval(SensorType.Gyroscope, 50000);
+      
+  //     final magStream = magnetometerEventStream(samplingPeriod: Duration(milliseconds: 100)).map((e) => [e.x, e.y, e.z, e.timestamp]);
+
+  //    StreamZip([accelStream, magStream]).listen((values) {
+  //     var accel = values[0]; // Данные акселерометра
+  //     var mag = values[1];   // Данные магнитометра
+    
+  //     double ax=accel[0] as double;
+  //     double ay=accel[1] as double;
+  //     double az=accel[2] as double;
+
+  //     double mx=mag[0] as double;
+  //     double my=mag[1] as double;
+  //     double mz=mag[2] as double;
+
+  //     //print("$mx, $my, $mz");
+  //     //return;
+  //     //List<Direction> direction =directionFounder(mx, my);
+      
+  //      //меряем время для delta t
+  //     newTime = accel[3] as DateTime;
+     
+  //     double dt= newTime.difference(oldTime).inMilliseconds/1000;
+  //     oldTime = newTime;
+  //   //делаем первый average
+  //     if (firstRead) {
+  //       avgx =ax;
+  //       avgy = ay;
+  //       firstRead = false;
+
+  //       oldTime =accel[3] as DateTime;
+  //       return;
+  //     }
+  //     //если телефон в воздухе, или нет сильного движения
+  //     if (!isOnGround(az)||((avgx - ax).abs() < deadZone && (avgy - ay).abs() < deadZone)) {
+  //         //усредняем
+
+  //         physicsHelper.wasStopped();
+  //         accXBuffer.add(ax);
+  //         accYBuffer.add(ay);
+  //         if (accXBuffer.length > bufferSize) {
+  //           accXBuffer.removeAt(0);
+  //         }
+  //         if (accYBuffer.length > bufferSize) {
+  //           accYBuffer.removeAt(0);
+  //         }
+
+          
+
+  //         double oldavgx = avgx;
+  //         double oldavgy = avgy;
+  //         //сохраняем average
+  //         avgx = accXBuffer.fold(0.0, (sum, x) => sum + (x)) / accXBuffer.length;
+  //         avgy = accYBuffer.fold(0.0, (sum, x) => sum + (x)) / accYBuffer.length;
+  //         oldTime = DateTime.now();
+  //        //print("no movement: x:${(ax - oldavgx).abs()} y:${(ay - oldavgy).abs()}",);
+  //         return;
+  //     } else {
+  //         double oldavgx = avgx;
+  //         double oldavgy = avgy;
+  //         accXBuffer.clear();
+  //         accYBuffer.clear();
+          
+  //         //physicsHelper.findDeltaMagnitometer(ax-avgx, ay-avgy, dt, direction[0], direction[1] );
+  //         physicsHelper.findDelta(ax-avgx, ax-avgy, dt);
+  //         //physicsHelper.findDelta(event.x-avgx, event.y-avgy, dt);
+
+  //         //сохраняем новый average
+  //         //log("it was a movement: ${ax} ${ay} + ${direction[0]} ${direction[1]}");
+  //         avgx = ax;
+  //         avgy = ay;
+  //         accXBuffer.add(ax);
+  //         accYBuffer.add(ay);
+  //         if (accXBuffer.length > bufferSize) {
+  //           accXBuffer.removeAt(0);
+  //         }
+  //         if (accYBuffer.length > bufferSize) {
+  //           accYBuffer.removeAt(0);
+  //         }
+  //     }
+  //   });
+    
+
+  //   oldTime = DateTime.now();
+  // }
+
+
+
+
+
+
+
     bool isOk=false;
 
    Future<bool> startConnection(String ip)async{
@@ -165,6 +638,7 @@ void calibrateAccelerometer() {
       return false;
     }
     if(isOk){
+      
       startAccelerometerListener();
       return true;
     }
@@ -181,13 +655,40 @@ void calibrateAccelerometer() {
         case TypesOfClick.LEFT_CLICK:
           serverConnector.sendLeftClick();
           break;
+        case TypesOfClick.DOUBLE_CLICK:
+          serverConnector.sendDoubleClick();
+          break;
+        case TypesOfClick.RIGHT_CLICK:
+          serverConnector.sendRightClick();
+          break;
+        case TypesOfClick.SCROLL_DOWN:
+          serverConnector.sendScrollDown();
+          break;
+        case TypesOfClick.SCROLL_UP:
+          serverConnector.sendScrollUp();
+          break;
+        case TypesOfClick.LONG_LEFT_START:
+          serverConnector.sendLongLeftStart();
+          break;
+        case TypesOfClick.LONG_LEFT_END:
+          serverConnector.sendLongLeftEnd();
+          break;
         default:
           break;
       }
     }
+
+
+
+
+
+
+
+
+
+
+
 }
-
-
     
 
 

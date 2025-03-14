@@ -86,8 +86,29 @@ Future<bool> isWebSocketReachable(String ip, {int port = 8765, Duration timeout 
   }
 
   void sendLeftClick(){
-    channel.sink.add("leftclick");
+    channel.sink.add("left_click");
   }
+  void sendRightClick(){
+    channel.sink.add("right_click");
+  }
+  void sendDoubleClick(){
+    channel.sink.add("double_click");
+  }
+  void sendScrollDown(){
+    channel.sink.add("scroll_down");
+  }
+  void sendScrollUp(){
+    channel.sink.add("scroll_up");
+  }
+  void sendLongLeftStart(){
+    channel.sink.add("long_left_start");
+  }
+  void sendLongLeftEnd(){
+    channel.sink.add("long_left_end");
+  }
+  
+
+  
 
   void end(){
     channel.sink.close();
@@ -97,3 +118,5 @@ Future<bool> isWebSocketReachable(String ip, {int port = 8765, Duration timeout 
 
 
 }
+
+

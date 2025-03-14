@@ -1,3 +1,6 @@
+import 'dart:developer';
+
+import 'package:mouse_test/direction.dart';
 import 'package:mouse_test/server_connector.dart';
 
 class PhysicsHelper {
@@ -50,7 +53,7 @@ double smoothValueY(double newValue) {
 
 
   void wasStopped(){
-    print(":(");
+    //print(":(");
     vx0*=0.5;
     vy0*=0.5;
     x0=0;
@@ -73,13 +76,9 @@ double smoothValueY(double newValue) {
     prevay=smoothValueY(0);
   }
 
-
-  void findDelta(double ax, double ay, double dt) {
-    //print("$ax $ay $dt");
-    //переводим в см
-    //переводим в см
-
-    //print("$ax $ay $dt");
+  void findDeltaMagnitometer(double ax, double ay, double dt, Direction directionX, Direction directionY) {
+     print("$ax $ay $dt");
+     
 
     
 
@@ -90,12 +89,22 @@ double smoothValueY(double newValue) {
     if ((ax > 0 && prevax < 0) || (ax < 0 && prevax > 0)) ax = 0;
     if ((ay > 0 && prevay < 0) || (ay < 0 && prevay > 0)) ay = 0;
 
-    ax= smoothValueX(ax);
-    ay= smoothValueY(ay);
+    //ax= smoothValueX(ax);
+    //ay= smoothValueY(ay);
 
-    double alpha = 0.4;
-    ax = alpha * ax + (1 - alpha) * prevax;
-    ay = alpha * ay + (1 - alpha) * prevay;
+    // if(directionX!=Direction.NO_MOVEMENT){
+    //    ax=ax.abs();
+    // }
+    // if(directionY!=Direction.NO_MOVEMENT){
+    //    ay=ay.abs();
+    // }
+    //  if(directionX==Direction.LEFT){
+    //    ax=-ax;
+    //  }
+    //  if(directionY==Direction.UP){
+    //    ay=-ay;
+    //  }
+
     if(ax==0 && ay==0){
       wasStopped();
       return;}
@@ -108,7 +117,7 @@ double smoothValueY(double newValue) {
     // if ((ax - prevax).abs() < threshold) ax = prevax;
     // if ((ay - prevay).abs() < threshold) ay = prevay;
 
-    print("$ax $ay $dt");
+    //print("$ax $ay $dt");
     prevax = ax;
     prevay = ay;
     vx1 = ax * dt + vx0;
@@ -127,9 +136,83 @@ double smoothValueY(double newValue) {
     dx = x1 - x0;
     dy = y1 - y0;
    
-    print("Δx: ${dx*100} ${dy*100}");
+   print("Δx: ${dx*100} ${dy*100}");
     //print("$x1 $y1");
-    print("-----------------");
+   // print("-----------------");
+    if(ax!=0 || ay!=0){
+      serverConnector.sendCursorMovement(dx*10, dy*10);
+      
+    }
+    x0 = x1;
+    y0 = y1;
+    z0 = z1;
+    vx0 = vx1;
+    vy0 = vy1;
+  }
+
+  int ctr=0;
+
+
+  void findDelta(double ax, double ay, double dt) {
+    //print("$ax $ay $dt");
+    //переводим в см
+    //переводим в см
+    
+    
+
+    //log("$ax $ay $dt");
+
+    
+
+   
+    ax = (ax.abs() < 0.02) ? 0 : ax;
+    ay = (ay.abs() < 0.02) ? 0 : ay;
+
+    if ((ax > 0 && prevax < 0) || (ax < 0 && prevax > 0)) ax = 0;
+    if ((ay > 0 && prevay < 0) || (ay < 0 && prevay > 0)) ay = 0;
+
+    ax= smoothValueX(ax);
+    ay= smoothValueY(ay);
+    // if(ax-prevax>10){
+    //   ax*=-1;
+    // }
+    // if(ay-prevay>10){
+    //   ay*=-1;
+    // }
+    if(ax==0 && ay==0){
+      wasStopped();
+      return;}
+    //  ax-=prevax;
+    // ay-=prevay; 
+
+    
+
+    // const double threshold = 0.03;
+    // if ((ax - prevax).abs() < threshold) ax = prevax;
+    // if ((ay - prevay).abs() < threshold) ay = prevay;
+
+    //print("$ax $ay $dt");
+    prevax = ax;
+    prevay = ay;
+    vx1 = ax * dt + vx0;
+    vy1 = ay * dt + vy0;
+
+    // if (vx1.abs() < 0.01) vx1 = 0;
+    // if (vy1.abs() < 0.01) vy1 = 0;
+
+     vx1 *= 0.9;
+      vy1 *= 0.9;
+
+    // Интегрируем скорость -> перемещение
+    x1 = x0 + vx1 * dt;
+    y1 = y0 + vy1 * dt;
+
+    dx = x1 - x0;
+    dy = y1 - y0;
+   
+   //log("Δx: ${dx*100} ${dy*100}");
+    //print("$x1 $y1");
+   // print("-----------------");
     if(ax!=0 || ay!=0){
       serverConnector.sendCursorMovement(dx*10, dy*10);
       
@@ -141,14 +224,20 @@ double smoothValueY(double newValue) {
     vy0 = vy1;
     //vx0=0;
     //vy0=0;
-    
-    //wasStopped();
+    if(ctr==3){
+       wasStopped();
+    }
+    ctr=(ctr+1)%20;
+   
     
   }
 
 
+  
  
 
 
 
 }
+
+
